@@ -101,6 +101,7 @@ namespace Map
                     break;
                 case NodeType.Store:
                     Debug.Log("Посещение магазина.");
+                    UnityEngine.SceneManagement.SceneManager.LoadScene("HeroSelection");
                     break;
                 case NodeType.Boss:
                     Debug.Log("Бой с боссом.");
