@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using DG.Tweening;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -30,8 +31,12 @@ namespace Map
         private float initialScale;
         private const float HoverScaleFactor = 1.2f;
         private float mouseDownTime;
-
         private const float MaxClickDuration = 0.5f;
+
+        // Новые поля для тумана войны
+        public bool isRevealed = false;       // Флаг: узел раскрыт или нет
+        public Sprite unknownIcon;            // Спрайт для тумана войны ("Camping-tent")
+        public bool fogEnabled = true;        // Если true, узлы изначально отображаются как неизвестные
 
         public void SetUp(Node node, NodeBlueprint blueprint)
         {
@@ -39,30 +44,44 @@ namespace Map
             Blueprint = blueprint;
             if (sr != null) sr.sprite = blueprint.sprite;
             if (image != null) image.sprite = blueprint.sprite;
-            if (node.nodeType == NodeType.Boss) transform.localScale *= 1.5f;
-            if (sr != null) initialScale = sr.transform.localScale.x;
-            if (image != null) initialScale = image.transform.localScale.x;
+            if (node.nodeType == NodeType.Boss)
+                transform.localScale *= 1.5f;
+            if (sr != null)
+                initialScale = sr.transform.localScale.x;
+            if (image != null)
+                initialScale = image.transform.localScale.x;
 
             if (visitedCircle != null)
             {
                 visitedCircle.color = MapView.Instance.visitedColor;
                 visitedCircle.gameObject.SetActive(false);
             }
-
             if (circleImage != null)
             {
                 circleImage.color = MapView.Instance.visitedColor;
-                circleImage.gameObject.SetActive(false);    
+                circleImage.gameObject.SetActive(false);
             }
-            
+
             SetState(NodeStates.Locked);
+
+            // Если включён туман войны, заменяем реальные спрайты на unknownIcon
+            if (fogEnabled && unknownIcon != null)
+            {
+                isRevealed = false;
+                if (sr != null) sr.sprite = unknownIcon;
+                if (image != null) image.sprite = unknownIcon;
+            }
+            else
+            {
+                isRevealed = true;
+            }
         }
 
         public void SetState(NodeStates state)
         {
             if (visitedCircle != null) visitedCircle.gameObject.SetActive(false);
             if (circleImage != null) circleImage.gameObject.SetActive(false);
-            
+
             switch (state)
             {
                 case NodeStates.Locked:
@@ -71,13 +90,11 @@ namespace Map
                         sr.DOKill();
                         sr.color = MapView.Instance.lockedColor;
                     }
-
                     if (image != null)
                     {
                         image.DOKill();
                         image.color = MapView.Instance.lockedColor;
                     }
-
                     break;
                 case NodeStates.Visited:
                     if (sr != null)
@@ -85,32 +102,27 @@ namespace Map
                         sr.DOKill();
                         sr.color = MapView.Instance.visitedColor;
                     }
-                    
                     if (image != null)
                     {
                         image.DOKill();
                         image.color = MapView.Instance.visitedColor;
                     }
-                    
                     if (visitedCircle != null) visitedCircle.gameObject.SetActive(true);
                     if (circleImage != null) circleImage.gameObject.SetActive(true);
                     break;
                 case NodeStates.Attainable:
-                    // start pulsating from visited to locked color:
                     if (sr != null)
                     {
                         sr.color = MapView.Instance.lockedColor;
                         sr.DOKill();
                         sr.DOColor(MapView.Instance.visitedColor, 0.5f).SetLoops(-1, LoopType.Yoyo);
                     }
-                    
                     if (image != null)
                     {
                         image.color = MapView.Instance.lockedColor;
                         image.DOKill();
                         image.DOColor(MapView.Instance.visitedColor, 0.5f).SetLoops(-1, LoopType.Yoyo);
                     }
-                    
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(state), state, null);
@@ -124,7 +136,6 @@ namespace Map
                 sr.transform.DOKill();
                 sr.transform.DOScale(initialScale * HoverScaleFactor, 0.3f);
             }
-
             if (image != null)
             {
                 image.transform.DOKill();
@@ -139,7 +150,6 @@ namespace Map
                 sr.transform.DOKill();
                 sr.transform.DOScale(initialScale, 0.3f);
             }
-
             if (image != null)
             {
                 image.transform.DOKill();
@@ -156,8 +166,32 @@ namespace Map
         {
             if (Time.time - mouseDownTime < MaxClickDuration)
             {
-                // user clicked on this node:
-                MapPlayerTracker.Instance.SelectNode(this);
+                if (fogEnabled && !isRevealed)
+                {
+                    RevealNode();
+                }
+                else
+                {
+                    MapPlayerTracker.Instance.SelectNode(this);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Раскрывает узел, заменяя unknownIcon на настоящий спрайт из Blueprint.
+        /// </summary>
+        public void RevealNode()
+        {
+            isRevealed = true;
+            if (Blueprint != null)
+            {
+                if (sr != null) sr.sprite = Blueprint.sprite;
+                if (image != null) image.sprite = Blueprint.sprite;
+                Debug.Log("Узел раскрыт: " + Node.blueprintName);
+            }
+            else
+            {
+                Debug.LogWarning("Blueprint отсутствует, не могу раскрыть узел!");
             }
         }
 
@@ -165,10 +199,8 @@ namespace Map
         {
             if (visitedCircleImage == null)
                 return;
-
             const float fillDuration = 0.3f;
             visitedCircleImage.fillAmount = 0;
-
             DOTween.To(() => visitedCircleImage.fillAmount, x => visitedCircleImage.fillAmount = x, 1f, fillDuration);
         }
 
@@ -179,7 +211,6 @@ namespace Map
                 image.transform.DOKill();
                 image.DOKill();
             }
-
             if (sr != null)
             {
                 sr.transform.DOKill();
